@@ -1,0 +1,120 @@
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BookRole {
+  owner
+  contributor
+  viewer
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  profile     Profile?
+  books       MemoryBook[]
+  memberships BookMember[]
+  pages       Page[]
+  reactions   Reaction[]
+  activityLog ActivityLog[]
+
+  @@map("users")
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model MemoryBook {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  coverImageUrl String?  @map("cover_image_url")
+  theme         String   @default("classic")
+  createdBy     String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  creator     User          @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  members     BookMember[]
+  pages       Page[]
+  activityLog ActivityLog[]
+
+  @@map("memory_books")
+}
+
+model BookMember {
+  id       String   @id @default(uuid())
+  bookId   String   @map("book_id")
+  userId   String   @map("user_id")
+  role     BookRole @default(viewer)
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  book MemoryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, userId])
+  @@map("book_members")
+}
+
+model Page {
+  id         String   @id @default(uuid())
+  bookId     String   @map("book_id")
+  authorId   String   @map("author_id")
+  title      String   @default("Untitled Memory")
+  content    Json?
+  pageNumber Int      @default(1) @map("page_number")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  book      MemoryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reactions Reaction[]
+
+  @@map("pages")
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  pageId    String   @map("page_id")
+  userId    String   @map("user_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  page Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, userId, emoji])
+  @@map("reactions")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  bookId    String   @map("book_id")
+  userId    String   @map("user_id")
+  action    String
+  details   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  book MemoryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activity_log")
+}
