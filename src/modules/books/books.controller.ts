@@ -3,6 +3,11 @@ import { prisma } from '../../config/db';
 import { AuthRequest } from '../../middleware/auth';
 import { z } from 'zod';
 
+// ✅ helper
+const getString = (value: any): string => {
+  return Array.isArray(value) ? value[0] : value;
+};
+
 const createBookSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100),
   description: z.string().max(500).optional(),
@@ -16,9 +21,11 @@ const inviteMemberSchema = z.object({
 
 // GET /api/books
 export const getMyBooks = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = getString(req.userId);
+
   const books = await prisma.memoryBook.findMany({
     where: {
-      members: { some: { userId: req.userId } },
+      members: { some: { userId } },
     },
     include: {
       members: {
@@ -38,11 +45,11 @@ export const getMyBooks = async (req: AuthRequest, res: Response): Promise<void>
 
 // GET /api/books/:bookId
 export const getBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { bookId } = req.params;
+  const bookId = getString(req.params.bookId);
+  const userId = getString(req.userId);
 
-  // Verify user is a member
   const member = await prisma.bookMember.findUnique({
-    where: { bookId_userId: { bookId, userId: req.userId! } },
+    where: { bookId_userId: { bookId, userId } },
   });
 
   if (!member) {
@@ -75,11 +82,13 @@ export const getBook = async (req: AuthRequest, res: Response): Promise<void> =>
 // POST /api/books
 export const createBook = async (req: AuthRequest, res: Response): Promise<void> => {
   const parsed = createBookSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
 
+  const userId = getString(req.userId);
   const { title, description, theme } = parsed.data;
 
   const book = await prisma.memoryBook.create({
@@ -87,10 +96,9 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
       title,
       description,
       theme: theme || 'classic',
-      createdBy: req.userId!,
-      // Auto-add creator as owner
+      createdBy: userId,
       members: {
-        create: { userId: req.userId!, role: 'owner' },
+        create: { userId, role: 'owner' },
       },
     },
     include: {
@@ -99,11 +107,10 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
     },
   });
 
-  // Log activity
   await prisma.activityLog.create({
     data: {
       bookId: book.id,
-      userId: req.userId!,
+      userId,
       action: 'book_created',
       details: { title },
     },
@@ -114,7 +121,8 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
 
 // PATCH /api/books/:bookId
 export const updateBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { bookId } = req.params;
+  const bookId = getString(req.params.bookId);
+
   const { title, description, theme, coverImageUrl } = req.body;
 
   const book = await prisma.memoryBook.update({
@@ -132,18 +140,22 @@ export const updateBook = async (req: AuthRequest, res: Response): Promise<void>
 
 // DELETE /api/books/:bookId
 export const deleteBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { bookId } = req.params;
+  const bookId = getString(req.params.bookId);
 
-  await prisma.memoryBook.delete({ where: { id: bookId } });
+  await prisma.memoryBook.delete({
+    where: { id: bookId },
+  });
 
   res.json({ message: 'Book deleted successfully' });
 };
 
 // POST /api/books/:bookId/members
 export const inviteMember = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { bookId } = req.params;
+  const bookId = getString(req.params.bookId);
+  const userId = getString(req.userId);
 
   const parsed = inviteMemberSchema.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
@@ -151,17 +163,17 @@ export const inviteMember = async (req: AuthRequest, res: Response): Promise<voi
 
   const { email, role } = parsed.data;
 
-  // Find user by email
   const invitedUser = await prisma.user.findUnique({ where: { email } });
+
   if (!invitedUser) {
     res.status(404).json({ error: 'No user found with that email' });
     return;
   }
 
-  // Check if already a member
   const existing = await prisma.bookMember.findUnique({
     where: { bookId_userId: { bookId, userId: invitedUser.id } },
   });
+
   if (existing) {
     res.status(409).json({ error: 'User is already a member' });
     return;
@@ -174,11 +186,10 @@ export const inviteMember = async (req: AuthRequest, res: Response): Promise<voi
     },
   });
 
-  // Log activity
   await prisma.activityLog.create({
     data: {
       bookId,
-      userId: req.userId!,
+      userId,
       action: 'member_invited',
       details: { invitedEmail: email, role },
     },
@@ -189,7 +200,8 @@ export const inviteMember = async (req: AuthRequest, res: Response): Promise<voi
 
 // DELETE /api/books/:bookId/members/:userId
 export const removeMember = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { bookId, userId } = req.params;
+  const bookId = getString(req.params.bookId);
+  const userId = getString(req.params.userId);
 
   await prisma.bookMember.delete({
     where: { bookId_userId: { bookId, userId } },
