@@ -13,8 +13,26 @@ import { errorHandler } from './middleware/errorHandler';
 const app = express();
 
 app.use(helmet());
+
+// ✅ CORS — allows local dev + Vercel production
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,        // set in Render env vars
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000'],
+  origin: (origin, callback) => {
+    // allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true,
 }));
 
@@ -27,8 +45,13 @@ const authLimiter = rateLimit({
   message: { error: 'Too many attempts, please try again later' },
 });
 
+// ✅ Health check — Render uses this to verify service is running
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+  });
 });
 
 app.use('/api/auth', authLimiter, authRoutes);
@@ -41,4 +64,5 @@ app.use((req, res) => {
 });
 
 app.use(errorHandler);
+
 export default app;
