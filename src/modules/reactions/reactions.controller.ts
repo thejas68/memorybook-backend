@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { AuthRequest } from '../../middleware/auth';
 import { z } from 'zod';
@@ -8,26 +8,24 @@ const reactionSchema = z.object({
   emoji: z.string().min(1).max(10),
 });
 
-// Helper to ensure string (avoids string | string[])
 const getString = (value: any): string => {
   return Array.isArray(value) ? value[0] : value;
 };
 
 // POST /api/reactions
-export const addReaction = async (req: AuthRequest, res: Response): Promise<void> => {
-  const parsed = reactionSchema.safeParse(req.body);
+export const addReaction = async (req: Request, res: Response): Promise<void> => {
+  const { body, userId } = req as AuthRequest;
+  const parsed = reactionSchema.safeParse(body);
 
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
 
-  const userId = getString(req.userId); // ✅ FIX
-
+  const resolvedUserId = getString(userId);
   const { pageId, emoji } = parsed.data;
 
   try {
-    // Check page exists
     const page = await prisma.page.findUnique({
       where: { id: pageId },
     });
@@ -37,12 +35,11 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Check membership
     const member = await prisma.bookMember.findUnique({
       where: {
         bookId_userId: {
           bookId: page.bookId,
-          userId,
+          userId: resolvedUserId,
         },
       },
     });
@@ -52,19 +49,18 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Upsert reaction (avoid duplicates)
     const reaction = await prisma.reaction.upsert({
       where: {
         pageId_userId_emoji: {
           pageId,
-          userId,
+          userId: resolvedUserId,
           emoji,
         },
       },
       update: {},
       create: {
         pageId,
-        userId,
+        userId: resolvedUserId,
         emoji,
       },
     });
@@ -77,9 +73,10 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
 };
 
 // DELETE /api/reactions/:reactionId
-export const removeReaction = async (req: AuthRequest, res: Response): Promise<void> => {
-  const reactionId = getString(req.params.reactionId); // ✅ FIX
-  const userId = getString(req.userId); // ✅ FIX
+export const removeReaction = async (req: Request, res: Response): Promise<void> => {
+  const { params, userId } = req as AuthRequest;
+  const reactionId = getString(params['reactionId']);
+  const resolvedUserId = getString(userId);
 
   try {
     const reaction = await prisma.reaction.findUnique({
@@ -91,7 +88,7 @@ export const removeReaction = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    if (reaction.userId !== userId) {
+    if (reaction.userId !== resolvedUserId) {
       res.status(403).json({ error: "Cannot remove someone else's reaction" });
       return;
     }

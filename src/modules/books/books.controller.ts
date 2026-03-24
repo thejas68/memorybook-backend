@@ -1,9 +1,8 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { AuthRequest } from '../../middleware/auth';
 import { z } from 'zod';
 
-// ✅ helper
 const getString = (value: any): string => {
   return Array.isArray(value) ? value[0] : value;
 };
@@ -20,12 +19,13 @@ const inviteMemberSchema = z.object({
 });
 
 // GET /api/books
-export const getMyBooks = async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = getString(req.userId);
+export const getMyBooks = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req as AuthRequest;
+  const resolvedUserId = getString(userId);
 
   const books = await prisma.memoryBook.findMany({
     where: {
-      members: { some: { userId } },
+      members: { some: { userId: resolvedUserId } },
     },
     include: {
       members: {
@@ -44,12 +44,13 @@ export const getMyBooks = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // GET /api/books/:bookId
-export const getBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const bookId = getString(req.params.bookId);
-  const userId = getString(req.userId);
+export const getBook = async (req: Request, res: Response): Promise<void> => {
+  const { userId, params } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const resolvedUserId = getString(userId);
 
   const member = await prisma.bookMember.findUnique({
-    where: { bookId_userId: { bookId, userId } },
+    where: { bookId_userId: { bookId, userId: resolvedUserId } },
   });
 
   if (!member) {
@@ -80,15 +81,16 @@ export const getBook = async (req: AuthRequest, res: Response): Promise<void> =>
 };
 
 // POST /api/books
-export const createBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const parsed = createBookSchema.safeParse(req.body);
+export const createBook = async (req: Request, res: Response): Promise<void> => {
+  const { userId, body } = req as AuthRequest;
+  const parsed = createBookSchema.safeParse(body);
 
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
 
-  const userId = getString(req.userId);
+  const resolvedUserId = getString(userId);
   const { title, description, theme } = parsed.data;
 
   const book = await prisma.memoryBook.create({
@@ -96,9 +98,9 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
       title,
       description,
       theme: theme || 'classic',
-      createdBy: userId,
+      createdBy: resolvedUserId,
       members: {
-        create: { userId, role: 'owner' },
+        create: { userId: resolvedUserId, role: 'owner' },
       },
     },
     include: {
@@ -110,7 +112,7 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
   await prisma.activityLog.create({
     data: {
       bookId: book.id,
-      userId,
+      userId: resolvedUserId,
       action: 'book_created',
       details: { title },
     },
@@ -120,10 +122,10 @@ export const createBook = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // PATCH /api/books/:bookId
-export const updateBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const bookId = getString(req.params.bookId);
-
-  const { title, description, theme, coverImageUrl } = req.body;
+export const updateBook = async (req: Request, res: Response): Promise<void> => {
+  const { params, body } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const { title, description, theme, coverImageUrl } = body;
 
   const book = await prisma.memoryBook.update({
     where: { id: bookId },
@@ -139,8 +141,9 @@ export const updateBook = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // DELETE /api/books/:bookId
-export const deleteBook = async (req: AuthRequest, res: Response): Promise<void> => {
-  const bookId = getString(req.params.bookId);
+export const deleteBook = async (req: Request, res: Response): Promise<void> => {
+  const { params } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
 
   await prisma.memoryBook.delete({
     where: { id: bookId },
@@ -150,11 +153,12 @@ export const deleteBook = async (req: AuthRequest, res: Response): Promise<void>
 };
 
 // POST /api/books/:bookId/members
-export const inviteMember = async (req: AuthRequest, res: Response): Promise<void> => {
-  const bookId = getString(req.params.bookId);
-  const userId = getString(req.userId);
+export const inviteMember = async (req: Request, res: Response): Promise<void> => {
+  const { params, body, userId } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const resolvedUserId = getString(userId);
 
-  const parsed = inviteMemberSchema.safeParse(req.body);
+  const parsed = inviteMemberSchema.safeParse(body);
 
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
@@ -189,7 +193,7 @@ export const inviteMember = async (req: AuthRequest, res: Response): Promise<voi
   await prisma.activityLog.create({
     data: {
       bookId,
-      userId,
+      userId: resolvedUserId,
       action: 'member_invited',
       details: { invitedEmail: email, role },
     },
@@ -199,9 +203,10 @@ export const inviteMember = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // DELETE /api/books/:bookId/members/:userId
-export const removeMember = async (req: AuthRequest, res: Response): Promise<void> => {
-  const bookId = getString(req.params.bookId);
-  const userId = getString(req.params.userId);
+export const removeMember = async (req: Request, res: Response): Promise<void> => {
+  const { params } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const userId = getString(params['userId']);
 
   await prisma.bookMember.delete({
     where: { bookId_userId: { bookId, userId } },

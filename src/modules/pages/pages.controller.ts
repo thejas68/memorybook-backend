@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { prisma } from '../../config/db';
 import { AuthRequest } from '../../middleware/auth';
 
@@ -7,12 +7,13 @@ const getString = (value: any): string => {
 };
 
 // GET pages of a book
-export const getPages = async (req: AuthRequest, res: Response) => {
-  const bookId = getString(req.params.bookId);
-  const userId = getString(req.userId);
+export const getPages = async (req: Request, res: Response) => {
+  const { userId, params } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const resolvedUserId = getString(userId);
 
   const member = await prisma.bookMember.findUnique({
-    where: { bookId_userId: { bookId, userId } },
+    where: { bookId_userId: { bookId, userId: resolvedUserId } },
   });
 
   if (!member) {
@@ -28,14 +29,14 @@ export const getPages = async (req: AuthRequest, res: Response) => {
 };
 
 // CREATE page
-export const createPage = async (req: AuthRequest, res: Response) => {
-  const bookId = getString(req.params.bookId);
-  const userId = getString(req.userId);
-
-  const { title, content, pageNumber } = req.body;
+export const createPage = async (req: Request, res: Response) => {
+  const { userId, params, body } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const resolvedUserId = getString(userId);
+  const { title, content, pageNumber } = body;
 
   const member = await prisma.bookMember.findUnique({
-    where: { bookId_userId: { bookId, userId } },
+    where: { bookId_userId: { bookId, userId: resolvedUserId } },
   });
 
   if (!member) {
@@ -45,7 +46,7 @@ export const createPage = async (req: AuthRequest, res: Response) => {
   const page = await prisma.page.create({
     data: {
       bookId,
-      authorId: userId,
+      authorId: resolvedUserId,
       title,
       content,
       pageNumber,
@@ -55,7 +56,7 @@ export const createPage = async (req: AuthRequest, res: Response) => {
   await prisma.activityLog.create({
     data: {
       bookId,
-      userId,
+      userId: resolvedUserId,
       action: 'page_created',
       details: { title },
     },
@@ -65,8 +66,9 @@ export const createPage = async (req: AuthRequest, res: Response) => {
 };
 
 // GET single page
-export const getPage = async (req: AuthRequest, res: Response) => {
-  const pageId = getString(req.params.pageId);
+export const getPage = async (req: Request, res: Response) => {
+  const { params } = req as AuthRequest;
+  const pageId = getString(params['pageId']);
 
   const page = await prisma.page.findUnique({
     where: { id: pageId },
@@ -80,10 +82,10 @@ export const getPage = async (req: AuthRequest, res: Response) => {
 };
 
 // UPDATE page
-export const updatePage = async (req: AuthRequest, res: Response) => {
-  const pageId = getString(req.params.pageId);
-
-  const { title, content } = req.body;
+export const updatePage = async (req: Request, res: Response) => {
+  const { params, body } = req as AuthRequest;
+  const pageId = getString(params['pageId']);
+  const { title, content } = body;
 
   const page = await prisma.page.update({
     where: { id: pageId },
@@ -97,8 +99,9 @@ export const updatePage = async (req: AuthRequest, res: Response) => {
 };
 
 // DELETE page
-export const deletePage = async (req: AuthRequest, res: Response) => {
-  const pageId = getString(req.params.pageId);
+export const deletePage = async (req: Request, res: Response) => {
+  const { params } = req as AuthRequest;
+  const pageId = getString(params['pageId']);
 
   await prisma.page.delete({
     where: { id: pageId },

@@ -8,9 +8,10 @@ const getString = (value: any): string => {
 };
 
 export function requireRole(...roles: string[]) {
-  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    const bookId = getString(req.params.bookId);
-    const userId = getString(req.userId);
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const authReq = req as AuthRequest;                    // ← cast here
+    const bookId = getString(authReq.params['bookId']);
+    const userId = getString(authReq.userId);
 
     if (!bookId) {
       next();
