@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc",
+    "build": "npx prisma generate && tsc",
     "start": "node dist/server.js"
   },
   "keywords": [],
@@ -26,15 +26,16 @@
     "multer-storage-cloudinary": "^4.0.0",
     "prisma": "^5.22.0",
     "resend": "^6.9.4",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.5.0",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^25.5.0"
+    
   }
 }
