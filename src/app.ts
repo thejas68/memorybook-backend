@@ -19,7 +19,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:8080',
   'http://localhost:3000',
-  process.env.FRONTEND_URL,        // set in Render env vars
+  'https://memorybook-frontend.vercel.app'        // set in Render env vars
 ].filter(Boolean) as string[];
 
 app.use(cors({
