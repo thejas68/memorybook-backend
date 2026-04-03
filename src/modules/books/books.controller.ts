@@ -18,6 +18,10 @@ const inviteMemberSchema = z.object({
   role: z.enum(['contributor', 'viewer']).default('viewer'),
 });
 
+const renameBookSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(100),
+});
+
 // GET /api/books
 export const getMyBooks = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req as AuthRequest;
@@ -140,10 +144,60 @@ export const updateBook = async (req: Request, res: Response): Promise<void> => 
   res.json(book);
 };
 
-// DELETE /api/books/:bookId
-export const deleteBook = async (req: Request, res: Response): Promise<void> => {
-  const { params } = req as AuthRequest;
+// PATCH /api/books/:bookId/rename  ← NEW
+export const renameBook = async (req: Request, res: Response): Promise<void> => {
+  const { userId, params, body } = req as AuthRequest;
   const bookId = getString(params['bookId']);
+  const resolvedUserId = getString(userId);
+
+  // Only owners can rename
+  const member = await prisma.bookMember.findUnique({
+    where: { bookId_userId: { bookId, userId: resolvedUserId } },
+  });
+
+  if (!member || member.role !== 'owner') {
+    res.status(403).json({ error: 'Only the owner can rename this book' });
+    return;
+  }
+
+  const parsed = renameBookSchema.safeParse(body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten().fieldErrors });
+    return;
+  }
+
+  const book = await prisma.memoryBook.update({
+    where: { id: bookId },
+    data: { title: parsed.data.title },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      bookId,
+      userId: resolvedUserId,
+      action: 'book_renamed',
+      details: { newTitle: parsed.data.title },
+    },
+  });
+
+  res.json(book);
+};
+
+// DELETE /api/books/:bookId  ← UPDATED (added owner check)
+export const deleteBook = async (req: Request, res: Response): Promise<void> => {
+  const { userId, params } = req as AuthRequest;
+  const bookId = getString(params['bookId']);
+  const resolvedUserId = getString(userId);
+
+  // Only owners can delete
+  const member = await prisma.bookMember.findUnique({
+    where: { bookId_userId: { bookId, userId: resolvedUserId } },
+  });
+
+  if (!member || member.role !== 'owner') {
+    res.status(403).json({ error: 'Only the owner can delete this book' });
+    return;
+  }
 
   await prisma.memoryBook.delete({
     where: { id: bookId },

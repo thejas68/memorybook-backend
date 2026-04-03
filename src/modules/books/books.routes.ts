@@ -9,6 +9,7 @@ import {
   deleteBook,
   inviteMember,
   removeMember,
+  renameBook,
 } from './books.controller';
 
 const router = Router();
@@ -16,6 +17,7 @@ const router = Router();
 router.get('/', requireAuth, getMyBooks);
 router.post('/', requireAuth, createBook);
 router.get('/:bookId', requireAuth, getBook);
+router.patch('/:bookId/rename', requireAuth, requireRole('owner'), renameBook);  // ← moved up
 router.patch('/:bookId', requireAuth, requireRole('owner'), updateBook);
 router.delete('/:bookId', requireAuth, requireRole('owner'), deleteBook);
 router.post('/:bookId/members', requireAuth, requireRole('owner'), inviteMember);
