@@ -9,7 +9,6 @@ The backend of **MemoryBook**, powering a collaborative digital memory platform 
 ---
 
 ## 🧠 Concept
-
 The backend serves as the **core engine** of MemoryBook, handling:
 
 * Memory storage
